@@ -15,17 +15,17 @@ import {
   FormControl,
   useMediaQuery,
   useTheme,
+  CircularProgress,
 } from '@mui/material';
-import { useNavigate, useLocation } from 'react-router';
+import { useNavigate, useLocation, useParams } from 'react-router';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import HistoryIcon from '@mui/icons-material/History';
 import FolderIcon from '@mui/icons-material/Folder';
 import LogoutIcon from '@mui/icons-material/Logout';
-import { mockProjects } from '../lib/mockData';
 import { useAuthStore } from '../../features/auth/authStore';
 import { useSignOut } from '../../features/auth/hooks/useSignOut';
-import { useState } from 'react';
+import { useProjects } from '../../features/projects/api/queries';
 
 interface SidebarProps {
   drawerWidth: number;
@@ -37,17 +37,25 @@ interface SidebarProps {
 export function Sidebar({ drawerWidth, mobileOpen, onMobileClose }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { projectId } = useParams<{ projectId: string }>();
   const signOut = useSignOut();
   const user = useAuthStore((state) => state.user);
-  const [selectedProject, setSelectedProject] = useState('proj-1');
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  const navigationItems = [
-    { label: 'Backlog', icon: <DashboardIcon />, path: `/projects/${selectedProject}/backlog` },
-    { label: 'Active Sprint', icon: <ViewKanbanIcon />, path: `/projects/${selectedProject}/board` },
-    { label: 'Sprints', icon: <HistoryIcon />, path: `/projects/${selectedProject}/sprints` },
-  ];
+  // Fetch real projects from API
+  const { data: projects, isLoading } = useProjects();
+
+  // Derive selected project from URL param or default to first project
+  const selectedProject = projectId || (projects && projects.length > 0 ? projects[0].id : '');
+
+  const navigationItems = selectedProject
+    ? [
+        { label: 'Backlog', icon: <DashboardIcon />, path: `/projects/${selectedProject}/backlog` },
+        { label: 'Active Sprint', icon: <ViewKanbanIcon />, path: `/projects/${selectedProject}/board` },
+        { label: 'Sprints', icon: <HistoryIcon />, path: `/projects/${selectedProject}/sprints` },
+      ]
+    : [];
 
   const handleNavigation = (path: string) => {
     navigate(path);
@@ -69,45 +77,57 @@ export function Sidebar({ drawerWidth, mobileOpen, onMobileClose }: SidebarProps
 
       <Box sx={{ px: 2.5, pb: 2 }}>
         <FormControl fullWidth size="small">
-          <Select
-            value={selectedProject}
-            onChange={(e) => {
-              setSelectedProject(e.target.value);
-              handleNavigation(`/projects/${e.target.value}/backlog`);
-            }}
-            sx={{
-              bgcolor: 'background.paper',
-              '& .MuiSelect-select': {
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-              },
-            }}
-          >
-            {mockProjects.map((project) => (
-              <MenuItem key={project.id} value={project.id}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box
-                    sx={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 1,
-                      bgcolor: 'primary.main',
-                      color: 'white',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {project.key}
+          {isLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 1 }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : projects && projects.length > 0 ? (
+            <Select
+              value={selectedProject || ''}
+              onChange={(e) => {
+                const newProjectId = e.target.value;
+                handleNavigation(`/projects/${newProjectId}/backlog`);
+              }}
+              sx={{
+                bgcolor: 'background.paper',
+                '& .MuiSelect-select': {
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                },
+              }}
+            >
+              {projects.map((project) => (
+                <MenuItem key={project.id} value={project.id}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box
+                      sx={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 1,
+                        bgcolor: 'primary.main',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {project.key}
+                    </Box>
+                    <Typography variant="body2" noWrap>
+                      {project.name}
+                    </Typography>
                   </Box>
-                  <Typography variant="body2">{project.name}</Typography>
-                </Box>
-              </MenuItem>
-            ))}
-          </Select>
+                </MenuItem>
+              ))}
+            </Select>
+          ) : (
+            <Typography variant="body2" color="text.secondary" align="center">
+              No projects
+            </Typography>
+          )}
         </FormControl>
       </Box>
 

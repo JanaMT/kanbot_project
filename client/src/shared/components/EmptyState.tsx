@@ -9,9 +9,14 @@ interface EmptyStateProps {
     label: string;
     onClick: () => void;
   };
+  secondaryAction?: {
+    label: string;
+    icon?: ReactNode;
+    onClick: () => void;
+  };
 }
 
-export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, secondaryAction }: EmptyStateProps) {
   return (
     <Box
       sx={{
@@ -37,10 +42,23 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
           {description}
         </Typography>
       )}
-      {action && (
-        <Button variant="contained" onClick={action.onClick}>
-          {action.label}
-        </Button>
+      {(action || secondaryAction) && (
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {action && (
+            <Button variant="contained" onClick={action.onClick}>
+              {action.label}
+            </Button>
+          )}
+          {secondaryAction && (
+            <Button
+              variant="outlined"
+              startIcon={secondaryAction.icon}
+              onClick={secondaryAction.onClick}
+            >
+              {secondaryAction.label}
+            </Button>
+          )}
+        </Box>
       )}
     </Box>
   );

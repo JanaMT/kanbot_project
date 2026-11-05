@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -7,13 +8,40 @@ import {
   Card,
   CardContent,
   Chip,
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
-import { mockBoardTodos, mockSprints } from '../../shared/lib/mockData';
-import { PriorityBadge } from '../../shared/components/PriorityBadge';
+import { useParams, useNavigate } from 'react-router';
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { TypeIcon } from '../../shared/components/TypeIcon';
 import { EmptyState } from '../../shared/components/EmptyState';
+import { LoadingState } from '../../shared/components/LoadingState';
+import { ErrorState } from '../../shared/components/ErrorState';
+import { useSprintBoard, useSprints, useCompleteSprint, useGenerateSprintSummary } from '../sprints/api/queries';
+import { useMoveBoardTodo } from './api/queries';
+import { BoardCard } from './components/BoardCard';
+import { TodoDetailsDialog } from '../backlog/components/TodoDetailsDialog';
+import { CompleteSprintDialog } from '../sprints/components/CompleteSprintDialog';
+import { SprintSummaryCard } from '../sprints/components/SprintSummaryCard';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
-import type { TodoStatus } from '../../shared/types/api';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import type { Todo, TodoStatus } from '../../shared/types/api';
 
 const statusColumns: { key: TodoStatus; label: string }[] = [
   { key: 'todo', label: 'To Do' },
@@ -22,10 +50,274 @@ const statusColumns: { key: TodoStatus; label: string }[] = [
   { key: 'done', label: 'Done' },
 ];
 
-export function BoardPage() {
-  const activeSprint = mockSprints.find((s) => s.status === 'active');
+function formatDate(dateString: string | null): string {
+  if (!dateString) return '';
+  return new Date(dateString).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
-  if (!activeSprint) {
+function calculateDaysRemaining(endDate: string | null): number {
+  if (!endDate) return 0;
+  const now = new Date();
+  const end = new Date(endDate);
+  const diff = end.getTime() - now.getTime();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+// Droppable column component
+function DroppableColumn({
+  status,
+  label,
+  todos,
+  onTodoClick,
+}: {
+  status: TodoStatus;
+  label: string;
+  todos: Todo[];
+  onTodoClick: (todo: Todo) => void;
+}) {
+  const { setNodeRef } = useDroppable({
+    id: status,
+  });
+
+  return (
+    <Paper
+      ref={setNodeRef}
+      sx={{
+        bgcolor: 'background.default',
+        minHeight: '60vh',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <Box
+        sx={{
+          p: 2,
+          borderBottom: '2px solid',
+          borderColor: 'divider',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          {label}
+        </Typography>
+        <Chip label={todos.length} size="small" sx={{ bgcolor: 'background.paper' }} />
+      </Box>
+
+      <Box sx={{ p: 1.5, flexGrow: 1 }}>
+        <SortableContext
+          items={todos.map((t) => t.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.5,
+              minHeight: 100,
+            }}
+          >
+            {todos.map((todo) => (
+              <BoardCard key={todo.id} todo={todo} onClick={() => onTodoClick(todo)} />
+            ))}
+          </Box>
+        </SortableContext>
+      </Box>
+    </Paper>
+  );
+}
+
+export function BoardPage() {
+  const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  const { data: sprints = [] } = useSprints(projectId || '');
+  const activeSprint = sprints.find((s) => s.status === 'active');
+
+  const {
+    data: boardData,
+    isLoading,
+    error,
+    refetch,
+  } = useSprintBoard(activeSprint?.id || '');
+
+  const moveMutation = useMoveBoardTodo();
+  const completeMutation = useCompleteSprint(projectId || '');
+  const generateSummaryMutation = useGenerateSprintSummary(activeSprint?.id || '');
+
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  }, []);
+
+  const handleDragOver = useCallback(() => {
+    // Track drag over events for visual feedback if needed
+  }, []);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveId(null);
+
+      if (!over || !activeSprint || !boardData) return;
+
+      const todoId = active.id as string;
+      const targetId = over.id as string;
+
+      // Find the dragged todo and its current status
+      let sourceStatus: TodoStatus | null = null;
+      for (const [status, todos] of Object.entries(boardData.columns)) {
+        if (todos.some((t) => t.id === todoId)) {
+          sourceStatus = status as TodoStatus;
+          break;
+        }
+      }
+
+      if (!sourceStatus) return;
+
+      // Check if dropped directly on a column
+      const targetColumn = statusColumns.find((col) => col.key === targetId);
+
+      if (targetColumn) {
+        // Dropped on a column container - add to the end
+        const targetTodos = boardData.columns[targetColumn.key];
+        
+        // Only move if it's a different column or if reordering
+        if (sourceStatus !== targetColumn.key || targetTodos.length > 1) {
+          moveMutation.mutate({
+            todoId,
+            data: {
+              status: targetColumn.key,
+              position: targetTodos.length,
+              sprintId: activeSprint.id,
+            },
+            sprintId: activeSprint.id,
+          });
+        }
+      } else {
+        // Dropped on another todo - find which column and position
+        let targetStatus: TodoStatus | null = null;
+        let targetPosition = 0;
+
+        for (const [status, todos] of Object.entries(boardData.columns)) {
+          const targetIndex = todos.findIndex((t) => t.id === targetId);
+          if (targetIndex !== -1) {
+            targetStatus = status as TodoStatus;
+            targetPosition = targetIndex;
+            break;
+          }
+        }
+
+        if (targetStatus) {
+          // Check if this is actually moving the card
+          const isSameColumn = sourceStatus === targetStatus;
+          const sourceTodos = boardData.columns[sourceStatus];
+          const sourceIndex = sourceTodos.findIndex((t) => t.id === todoId);
+
+          // Don't move if dropping on itself or in the exact same position
+          if (todoId !== targetId && !(isSameColumn && sourceIndex === targetPosition)) {
+            moveMutation.mutate({
+              todoId,
+              data: {
+                status: targetStatus,
+                position: targetPosition,
+                sprintId: activeSprint.id,
+              },
+              sprintId: activeSprint.id,
+            });
+          }
+        }
+      }
+    },
+    [activeSprint, boardData, moveMutation]
+  );
+
+  const handleTodoClick = useCallback((todo: Todo) => {
+    setSelectedTodo(todo);
+    setDetailsOpen(true);
+  }, []);
+
+  const handleDetailsClose = useCallback(() => {
+    setDetailsOpen(false);
+    setSelectedTodo(null);
+  }, []);
+
+  const handleCompleteClick = () => {
+    setMenuAnchor(null);
+    setCompleteDialogOpen(true);
+  };
+
+  const handleGenerateSummary = async () => {
+    setSummaryError(null);
+    setMenuAnchor(null);
+    try {
+      await generateSummaryMutation.mutateAsync();
+      // Clear error on success
+      setSummaryError(null);
+    } catch {
+      setSummaryError('Failed to generate summary. Please try again.');
+    }
+  };
+
+  const handleRetrySummary = () => {
+    handleGenerateSummary();
+  };
+
+  const handleCompleteSprint = useCallback(
+    (moveUnfinishedTo: string) => {
+      if (!activeSprint) return;
+
+      completeMutation.mutate(
+        {
+          sprintId: activeSprint.id,
+          data: { moveUnfinishedTo },
+        },
+        {
+          onSuccess: (completedSprint) => {
+            setCompleteDialogOpen(false);
+            // TODO: If generateSummary is true, call AI summary endpoint
+            // For now, navigate to sprint details
+            navigate(`/projects/${projectId}/sprints/${completedSprint.id}`);
+          },
+        }
+      );
+    },
+    [activeSprint, completeMutation, navigate, projectId]
+  );
+
+  if (!projectId) {
+    return <ErrorState message="Project ID is missing" onRetry={() => window.location.reload()} />;
+  }
+
+  if (isLoading) {
+    return <LoadingState />;
+  }
+
+  if (error) {
+    return <ErrorState message="Failed to load board" onRetry={refetch} />;
+  }
+
+  if (!activeSprint || !boardData) {
     return (
       <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
         <EmptyState
@@ -34,158 +326,206 @@ export function BoardPage() {
           description="Start a sprint from the backlog to see the board"
           action={{
             label: 'Go to backlog',
-            onClick: () => window.location.href = '/projects/proj-1/backlog',
+            onClick: () => navigate(`/projects/${projectId}/backlog`),
           }}
         />
       </Box>
     );
   }
 
-  const progress = (activeSprint.stats.donePoints / activeSprint.stats.totalPoints) * 100;
-  const daysLeft = Math.max(0, Math.ceil((new Date(activeSprint.endDate!).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)));
+  const { sprint, columns } = boardData;
+  const progress =
+    sprint.stats.totalPoints > 0
+      ? (sprint.stats.donePoints / sprint.stats.totalPoints) * 100
+      : 0;
+  const daysLeft = calculateDaysRemaining(sprint.endDate);
+
+  const activeTodo = activeId
+    ? Object.values(columns)
+        .flat()
+        .find((t) => t.id === activeId)
+    : null;
+
+  const plannedSprints = sprints.filter((s) => s.status === 'planned');
 
   return (
-    <Box sx={{ maxWidth: 1600, mx: 'auto' }}>
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 3 }}>
-          <Box>
-            <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
-              {activeSprint.name}
-            </Typography>
-            <Typography variant="body1" color="text.secondary" gutterBottom>
-              {activeSprint.goal}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {new Date(activeSprint.startDate!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{' '}
-              {new Date(activeSprint.endDate!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ·{' '}
-              {daysLeft} days left
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button variant="outlined">
-              Summarize
-            </Button>
-            <Button variant="contained">
-              Complete sprint
-            </Button>
-          </Box>
-        </Box>
-
-        <Box sx={{ mb: 1 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {activeSprint.stats.donePoints} / {activeSprint.stats.totalPoints} pts done
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {activeSprint.stats.doneTodos} / {activeSprint.stats.totalTodos} todos
-            </Typography>
-          </Box>
-          <LinearProgress
-            variant="determinate"
-            value={progress}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+    >
+      <Box sx={{ maxWidth: 1600, mx: 'auto' }}>
+        {/* Sprint Header */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box
             sx={{
-              height: 8,
-              borderRadius: 1,
-              bgcolor: 'background.default',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'start',
+              mb: 3,
+              flexWrap: 'wrap',
+              gap: 2,
             }}
-          />
-        </Box>
-      </Paper>
-
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
-        {statusColumns.map((column) => {
-          const todos = mockBoardTodos[column.key] || [];
-          return (
-            <Paper
-              key={column.key}
-                sx={{
-                  bgcolor: 'background.default',
-                  minHeight: '60vh',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
+          >
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
+                {sprint.name}
+              </Typography>
+              {sprint.goal && (
+                <Typography variant="body1" color="text.secondary" gutterBottom>
+                  {sprint.goal}
+                </Typography>
+              )}
+              <Typography variant="body2" color="text.secondary">
+                {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
+                {daysLeft > 0 && ` · ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} remaining`}
+                {daysLeft === 0 && ' · Last day'}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+              <IconButton
+                onClick={(e) => setMenuAnchor(e.currentTarget)}
+                size="small"
+                aria-label="More actions"
               >
-                <Box
-                  sx={{
-                    p: 2,
-                    borderBottom: '2px solid',
-                    borderColor: 'divider',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
+                <MoreVertIcon />
+              </IconButton>
+              <Menu
+                anchorEl={menuAnchor}
+                open={Boolean(menuAnchor)}
+                onClose={() => setMenuAnchor(null)}
+              >
+                <MenuItem onClick={handleCompleteClick}>
+                  <ListItemText>Complete Sprint</ListItemText>
+                </MenuItem>
+                <MenuItem
+                  onClick={handleGenerateSummary}
+                  disabled={generateSummaryMutation.isPending}
                 >
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    {column.label}
-                  </Typography>
-                  <Chip
-                    label={todos.length}
-                    size="small"
-                    sx={{ bgcolor: 'background.paper' }}
-                  />
-                </Box>
+                  <ListItemIcon>
+                    <AutoAwesomeIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>
+                    {sprint.summary ? 'Regenerate Summary' : 'Generate Summary'}
+                  </ListItemText>
+                </MenuItem>
+              </Menu>
+              <Button variant="contained" onClick={handleCompleteClick}>
+                Complete Sprint
+              </Button>
+            </Box>
+          </Box>
 
-                <Box sx={{ p: 1.5, flexGrow: 1 }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    {todos.map((todo) => (
-                      <Card
-                        key={todo.id}
-                        sx={{
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          '&:hover': {
-                            boxShadow: 2,
-                            transform: 'translateY(-2px)',
-                          },
-                        }}
-                      >
-                        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                          <Box sx={{ display: 'flex', alignItems: 'start', gap: 1, mb: 1 }}>
-                            <TypeIcon type={todo.type} />
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{ fontFamily: 'monospace' }}
-                            >
-                              {todo.key}
-                            </Typography>
-                          </Box>
+          {/* Progress */}
+          <Box sx={{ mb: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {sprint.stats.donePoints} / {sprint.stats.totalPoints} story points done
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {sprint.stats.doneTodos} / {sprint.stats.totalTodos} todos
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={progress}
+              sx={{
+                height: 8,
+                borderRadius: 1,
+                bgcolor: 'background.default',
+              }}
+            />
+          </Box>
+        </Paper>
 
-                          <Typography variant="body2" sx={{ mb: 1.5, fontWeight: 500 }}>
-                            {todo.title}
-                          </Typography>
+        {/* AI Summary - show if exists, generating, or has error */}
+        {(sprint.summary || generateSummaryMutation.isPending || summaryError) && (
+          <SprintSummaryCard
+            sprint={sprint}
+            onGenerate={handleGenerateSummary}
+            isGenerating={generateSummaryMutation.isPending}
+            error={summaryError}
+            onRetry={handleRetrySummary}
+          />
+        )}
 
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <PriorityBadge priority={todo.priority} />
-                            {todo.storyPoints && (
-                              <Chip
-                                label={`${todo.storyPoints} pts`}
-                                size="small"
-                                sx={{
-                                  height: 24,
-                                  bgcolor: 'background.default',
-                                  fontWeight: 600,
-                                }}
-                              />
-                            )}
-                          </Box>
-
-                          {todo.labels.length > 0 && (
-                            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 1 }}>
-                              {todo.labels.map((label) => (
-                                <Chip key={label} label={label} size="small" sx={{ height: 20 }} />
-                              ))}
-                            </Box>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </Box>
-                </Box>
-              </Paper>
-          );
-        })}
+        {/* Board Columns */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, 1fr)',
+              md: 'repeat(4, 1fr)',
+            },
+            gap: 2,
+          }}
+        >
+          {statusColumns.map((column) => {
+            const todos = columns[column.key] || [];
+            return (
+              <DroppableColumn
+                key={column.key}
+                status={column.key}
+                label={column.label}
+                todos={todos}
+                onTodoClick={handleTodoClick}
+              />
+            );
+          })}
+        </Box>
       </Box>
-    </Box>
+
+      <DragOverlay>
+        {activeTodo ? (
+          <Card
+            sx={{
+              cursor: 'grabbing',
+              boxShadow: 4,
+              transform: 'rotate(3deg)',
+            }}
+          >
+            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'start', gap: 1, mb: 1 }}>
+                <TypeIcon type={activeTodo.type} />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontFamily: 'monospace' }}
+                >
+                  {activeTodo.key}
+                </Typography>
+              </Box>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {activeTodo.title}
+              </Typography>
+            </CardContent>
+          </Card>
+        ) : null}
+      </DragOverlay>
+
+      {/* Todo Details Dialog */}
+      <TodoDetailsDialog
+        open={detailsOpen}
+        onClose={handleDetailsClose}
+        todo={selectedTodo}
+        onDelete={() => {
+          // Don't allow delete from board
+        }}
+        sprints={sprints.filter((s) => s.status !== 'completed')}
+      />
+
+      {/* Complete Sprint Dialog */}
+      <CompleteSprintDialog
+        open={completeDialogOpen}
+        onClose={() => setCompleteDialogOpen(false)}
+        sprint={activeSprint}
+        onComplete={handleCompleteSprint}
+        isLoading={completeMutation.isPending}
+        plannedSprints={plannedSprints}
+      />
+    </DndContext>
   );
 }

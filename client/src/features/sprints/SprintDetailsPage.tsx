@@ -1,15 +1,13 @@
-import {
-  Box,
-  Typography,
-  Paper,
-  Chip,
-  Button,
-  Divider,
-} from '@mui/material';
+import { useState } from 'react';
+import { Box, Typography, Paper, Chip, Button, Divider, Alert } from '@mui/material';
 import { useParams, useNavigate } from 'react-router';
-import { mockSprints } from '../../shared/lib/mockData';
-import ReactMarkdown from 'react-markdown';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { LoadingState } from '../../shared/components/LoadingState';
+import { ErrorState } from '../../shared/components/ErrorState';
+import { useSprint, useGenerateSprintSummary } from './api/queries';
+import { useTodos } from '../backlog/api/queries';
+import { TodoList } from '../backlog/components/TodoList';
+import { SprintSummaryCard } from './components/SprintSummaryCard';
 import type { SprintStatus } from '../../shared/types/api';
 
 const statusColors: Record<SprintStatus, 'success' | 'primary' | 'default'> = {
@@ -24,46 +22,95 @@ const statusLabels: Record<SprintStatus, string> = {
   completed: 'Completed',
 };
 
-export function SprintDetailsPage() {
-  const { sprintId } = useParams<{ sprintId: string }>();
-  const navigate = useNavigate();
-  const sprint = mockSprints.find((s) => s.id === sprintId);
+function formatDate(dateString: string | null): string {
+  if (!dateString) return 'Not set';
+  return new Date(dateString).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
-  if (!sprint) {
-    return (
-      <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
-        <Typography>Sprint not found</Typography>
-      </Box>
-    );
+function formatDateTime(dateString: string | null): string {
+  if (!dateString) return 'Not set';
+  return new Date(dateString).toLocaleString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+export function SprintDetailsPage() {
+  const { projectId, sprintId } = useParams<{ projectId: string; sprintId: string }>();
+  const navigate = useNavigate();
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  const { data: sprint, isLoading, error, refetch } = useSprint(sprintId || '');
+  const { data: todos = [] } = useTodos(projectId || '', { sprintId: sprintId || '' });
+  const generateSummaryMutation = useGenerateSprintSummary(sprintId || '');
+
+  const handleGenerateSummary = async () => {
+    setSummaryError(null);
+    try {
+      await generateSummaryMutation.mutateAsync();
+      // Clear error on success
+      setSummaryError(null);
+    } catch {
+      // Error is already handled by the mutation's onError
+      // We just need to track it locally for the component
+      setSummaryError('Failed to generate summary. Please try again.');
+    }
+  };
+
+  const handleRetrySummary = () => {
+    handleGenerateSummary();
+  };
+
+  if (!projectId || !sprintId) {
+    return <ErrorState message="Missing parameters" onRetry={() => window.location.reload()} />;
+  }
+
+  if (isLoading) {
+    return <LoadingState />;
+  }
+
+  if (error || !sprint) {
+    return <ErrorState message="Failed to load sprint details" onRetry={refetch} />;
   }
 
   const stats = sprint.status === 'completed' && sprint.completedStats
     ? sprint.completedStats
     : sprint.stats;
 
-  const completionRate = stats.totalTodos > 0
-    ? Math.round((stats.doneTodos / stats.totalTodos) * 100)
+  const completionPercentage = stats.totalPoints > 0
+    ? Math.round((stats.donePoints / stats.totalPoints) * 100)
     : 0;
 
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
+      {/* Back Button */}
       <Button
         startIcon={<ArrowBackIcon />}
-        onClick={() => navigate('/projects/proj-1/sprints')}
+        onClick={() => navigate(`/projects/${projectId}/sprints`)}
         sx={{ mb: 3 }}
       >
-        Back to sprints
+        Back to Sprints
       </Button>
 
-      <Paper sx={{ p: 4, mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 3 }}>
+      {/* Header */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2, flexWrap: 'wrap', gap: 2 }}>
           <Box>
-            <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
               {sprint.name}
             </Typography>
             <Chip
               label={statusLabels[sprint.status]}
               color={statusColors[sprint.status]}
+              size="medium"
               sx={{ mb: 2 }}
             />
             {sprint.goal && (
@@ -73,99 +120,145 @@ export function SprintDetailsPage() {
             )}
           </Box>
           {sprint.status === 'active' && (
-            <Button variant="contained">
-              Go to board
+            <Button
+              variant="contained"
+              onClick={() => navigate(`/projects/${projectId}/board`)}
+            >
+              Go to Board
             </Button>
           )}
         </Box>
 
-        {sprint.startDate && sprint.endDate && (
-          <Typography variant="body2" color="text.secondary">
-            {new Date(sprint.startDate).toLocaleDateString('en-US', { 
-              month: 'long',
-              day: 'numeric',
-              year: 'numeric'
-            })} –{' '}
-            {new Date(sprint.endDate).toLocaleDateString('en-US', { 
-              month: 'long',
-              day: 'numeric',
-              year: 'numeric'
-            })}
+        {/* Dates */}
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            <strong>Start:</strong> {formatDate(sprint.startDate)}
           </Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            <strong>End:</strong> {formatDate(sprint.endDate)}
+          </Typography>
+          {sprint.startedAt && (
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              <strong>Started at:</strong> {formatDateTime(sprint.startedAt)}
+            </Typography>
+          )}
+          {sprint.completedAt && (
+            <Typography variant="body2" color="text.secondary">
+              <strong>Completed at:</strong> {formatDateTime(sprint.completedAt)}
+            </Typography>
+          )}
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
+
+        {/* Stats */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 3 }}>
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              Completion
+            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              {completionPercentage}%
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              Story Points
+            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              {stats.donePoints} / {stats.totalPoints}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              Todos Completed
+            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              {stats.doneTodos} / {stats.totalTodos}
+            </Typography>
+          </Box>
+          {sprint.completedStats && (
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                Carried Over
+              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                {sprint.completedStats.carriedOver}
+              </Typography>
+            </Box>
+          )}
+        </Box>
+
+        {/* Status breakdown */}
+        {sprint.status !== 'planned' && (
+          <>
+            <Divider sx={{ my: 3 }} />
+            <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  To Do
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                  {stats.byStatus.todo}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  In Progress
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                  {stats.byStatus.in_progress}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  In Review
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                  {stats.byStatus.in_review}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  Done
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                  {stats.byStatus.done}
+                </Typography>
+              </Box>
+            </Box>
+          </>
         )}
       </Paper>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
-        <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h3" sx={{ fontWeight: 700, color: 'primary.main' }}>
-            {completionRate}%
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Completion rate
-          </Typography>
-        </Paper>
-        <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h3" sx={{ fontWeight: 700 }}>
-            {stats.doneTodos}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            of {stats.totalTodos} todos done
-          </Typography>
-        </Paper>
-        <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h3" sx={{ fontWeight: 700 }}>
-            {stats.donePoints}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            of {stats.totalPoints} points done
-          </Typography>
-        </Paper>
-        {sprint.completedStats && (
-          <Paper sx={{ p: 3, textAlign: 'center' }}>
-            <Typography variant="h3" sx={{ fontWeight: 700 }}>
-              {sprint.completedStats.carriedOver}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Carried over
-            </Typography>
-          </Paper>
-        )}
-      </Box>
-
-      {sprint.summary && (
-        <Paper sx={{ p: 4 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              AI Summary
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Chip
-                label={sprint.summary.source === 'ai' ? 'AI' : 'Mock AI'}
-                size="small"
-                sx={{ bgcolor: '#334155', color: 'white' }}
-              />
-              <Typography variant="caption" color="text.secondary">
-                Generated {new Date(sprint.summary.generatedAt).toLocaleDateString()}
-              </Typography>
-              <Button size="small" variant="outlined">
-                Regenerate
-              </Button>
-            </Box>
-          </Box>
-          <Divider sx={{ mb: 3 }} />
-          <Box
-            sx={{
-              '& h2': { fontSize: '1.5rem', fontWeight: 600, mt: 3, mb: 2 },
-              '& h3': { fontSize: '1.25rem', fontWeight: 600, mt: 2, mb: 1 },
-              '& p': { mb: 2 },
-              '& ul': { pl: 3, mb: 2 },
-              '& li': { mb: 1 },
-            }}
-          >
-            <ReactMarkdown>{sprint.summary.content}</ReactMarkdown>
-          </Box>
-        </Paper>
+      {/* AI Summary for completed sprints */}
+      {sprint.status === 'completed' && (
+        <SprintSummaryCard
+          sprint={sprint}
+          onGenerate={handleGenerateSummary}
+          isGenerating={generateSummaryMutation.isPending}
+          error={summaryError}
+          onRetry={handleRetrySummary}
+        />
       )}
+
+      {/* Todos */}
+      <Paper sx={{ p: 3 }}>
+        <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
+          Todos ({todos.length})
+        </Typography>
+        {todos.length === 0 ? (
+          <Alert severity="info">No todos in this sprint</Alert>
+        ) : (
+          <TodoList
+            todos={todos}
+            onTodoClick={() => {}}
+            onReorder={() => {}}
+            onMoveClick={() => {}}
+            isDragDisabled={true}
+          />
+        )}
+      </Paper>
     </Box>
   );
 }

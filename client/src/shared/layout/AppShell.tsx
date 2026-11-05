@@ -2,6 +2,7 @@ import { Box, useMediaQuery, useTheme } from '@mui/material';
 import { Outlet } from 'react-router';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
+import { AiDrawer } from '../../features/ai/components/AiDrawer';
 import { useState } from 'react';
 
 const DRAWER_WIDTH = 280;
@@ -51,6 +52,9 @@ export function AppShell() {
           <Outlet context={{ aiDrawerOpen, setAiDrawerOpen }} />
         </Box>
       </Box>
+
+      {/* AI Assistant Drawer */}
+      <AiDrawer open={aiDrawerOpen} onClose={() => setAiDrawerOpen(false)} />
     </Box>
   );
 }
