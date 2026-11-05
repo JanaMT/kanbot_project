@@ -16,6 +16,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ReactMarkdown from 'react-markdown';
 import type { Sprint } from '../../../shared/types/api';
+import { getSafeAiErrorMessage } from '../../ai/utils/errorMessages';
 
 interface SprintSummaryCardProps {
   sprint: Sprint;
@@ -33,31 +34,6 @@ function formatDateTime(dateString: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
-}
-
-function getSafeErrorMessage(error: string | null): string {
-  if (!error) return '';
-  
-  const lowerError = error.toLowerCase();
-  
-  if (lowerError.includes('network') || lowerError.includes('connection') || lowerError.includes('offline')) {
-    return 'Connection lost. Check your internet and try again.';
-  }
-  
-  if (lowerError.includes('ai') && lowerError.includes('unavailable')) {
-    return 'The AI service is temporarily unavailable. Please try again.';
-  }
-  
-  if (lowerError.includes('rate') || lowerError.includes('limit') || lowerError.includes('busy')) {
-    return 'AI is busy right now. Please wait a moment and try again.';
-  }
-  
-  if (lowerError.includes('502') || lowerError.includes('ai error') || lowerError.includes('ai encountered')) {
-    return 'The AI service is temporarily unavailable. Please try again.';
-  }
-  
-  // Generic fallback
-  return 'The AI service is temporarily unavailable. Please try again.';
 }
 
 export function SprintSummaryCard({
@@ -127,7 +103,7 @@ export function SprintSummaryCard({
     );
   }
 
-  const safeErrorMessage = error ? getSafeErrorMessage(error) : null;
+  const safeErrorMessage = error ? getSafeAiErrorMessage(error) : null;
   const showError = error && hasSummary; // Only show error if regenerate failed with existing summary
 
   return (

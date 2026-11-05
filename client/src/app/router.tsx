@@ -6,7 +6,10 @@ import { projectsRoutes } from '../features/projects/routes';
 import { backlogRoutes } from '../features/backlog/routes';
 import { boardRoutes } from '../features/board/routes';
 import { sprintsRoutes } from '../features/sprints/routes';
-import { fallbackRoutes } from '../features/router/routes';
+import { lazyPage } from '../shared/lib/lazyPage';
+
+// Fallback route for 404 errors
+const NotFoundPage = lazyPage(() => import('./components/NotFoundPage'), (m) => m.NotFoundPage);
 
 export const router = createBrowserRouter([
   {
@@ -30,7 +33,7 @@ export const router = createBrowserRouter([
           ...sprintsRoutes,
         ],
       },
-      ...fallbackRoutes,
+      { path: '*', Component: NotFoundPage },
     ],
   },
 ]);

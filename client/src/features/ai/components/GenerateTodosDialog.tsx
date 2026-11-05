@@ -31,7 +31,7 @@ import type {
   CreateTodoRequest,
 } from '../../../shared/types/api';
 import { TODO_TYPES, TODO_PRIORITIES, STORY_POINTS } from '../../../shared/types/api';
-import { ApiError } from '../../../shared/api/client';
+import { getSafeAiErrorMessage } from '../utils/errorMessages';
 
 interface GenerateTodosDialogProps {
   open: boolean;
@@ -81,6 +81,9 @@ export function GenerateTodosDialog({ open, onClose, projectId }: GenerateTodosD
     try {
       const response = await generateMutation.mutateAsync(data);
       
+      // Clear error on success
+      setError(null);
+      
       // Mark all drafts as selected by default and add stable client IDs
       const editableDrafts: EditableDraftTodo[] = response.todos.map((todo, index) => ({
         ...todo,
@@ -90,21 +93,8 @@ export function GenerateTodosDialog({ open, onClose, projectId }: GenerateTodosD
       
       setDrafts(editableDrafts);
     } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.code === 'RATE_LIMITED') {
-          setError(
-            'Too many requests. Please wait a minute before trying again.'
-          );
-        } else if (err.code === 'AI_ERROR') {
-          setError(
-            err.message || 'The AI encountered an error. Please try again in a moment.'
-          );
-        } else {
-          setError(err.message || 'Failed to generate todos. Please try again.');
-        }
-      } else {
-        setError('Network error. Please check your connection and try again.');
-      }
+      // Use safe error message mapper - never expose raw provider errors
+      setError(getSafeAiErrorMessage(err));
     } finally {
       setIsGenerating(false);
     }
@@ -159,12 +149,9 @@ export function GenerateTodosDialog({ open, onClose, projectId }: GenerateTodosD
       
       // Close dialog on success
       handleClose();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message || 'Failed to save todos. Please try again.');
-      } else {
-        setError('Network error. Please check your connection and try again.');
-      }
+    } catch {
+      // For save errors, show a generic message (not AI-specific)
+      setError('Failed to save todos. Please try again.');
     }
   };
 

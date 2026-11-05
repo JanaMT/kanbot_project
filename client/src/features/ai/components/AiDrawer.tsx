@@ -25,7 +25,7 @@ import { ChatWelcome } from './ChatWelcome';
 import { ChatInput } from './ChatInput';
 import { GenerateTodosDialog } from './GenerateTodosDialog';
 import { PlanSprintDialog } from './PlanSprintDialog';
-import { ApiError } from '../../../shared/api/client';
+import { getSafeAiErrorMessage } from '../utils/errorMessages';
 
 interface AiDrawerProps {
   open: boolean;
@@ -72,24 +72,14 @@ export function AiDrawer({ open, onClose }: AiDrawerProps) {
         messages: [...messages, userMessage],
       });
 
+      // Clear error on success
+      setError(null);
+
       // Add assistant response
       addMessage(response.message);
     } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.code === 'RATE_LIMITED') {
-          setError(
-            'Too many requests. Please wait a minute before trying again. The AI has usage limits to keep costs down.'
-          );
-        } else if (err.code === 'AI_ERROR') {
-          setError(
-            err.message || 'The AI encountered an error. Please try again in a moment.'
-          );
-        } else {
-          setError(err.message || 'Failed to send message. Please try again.');
-        }
-      } else {
-        setError('Network error. Please check your connection and try again.');
-      }
+      // Use safe error message mapper - never expose raw provider errors
+      setError(getSafeAiErrorMessage(err));
     } finally {
       setIsThinking(false);
     }

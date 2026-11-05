@@ -287,6 +287,13 @@ export function BacklogPage() {
           }}
         />
         <QuickCreateTodo ref={quickCreateRef} projectId={projectId} />
+        
+        {/* Generate Todos Dialog */}
+        <GenerateTodosDialog
+          open={generateTodosOpen}
+          onClose={() => setGenerateTodosOpen(false)}
+          projectId={projectId}
+        />
       </Box>
     );
   }

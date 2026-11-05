@@ -22,7 +22,7 @@ import { useCreateSprint } from '../../sprints/api/queries';
 import { useTodos } from '../../backlog/api/queries';
 import { planSprintSchema, type PlanSprintFormData } from '../validation/planSprintSchema';
 import type { PlanSprintResponse, Todo } from '../../../shared/types/api';
-import { ApiError } from '../../../shared/api/client';
+import { getSafeAiErrorMessage } from '../utils/errorMessages';
 
 interface PlanSprintDialogProps {
   open: boolean;
@@ -80,22 +80,16 @@ export function PlanSprintDialog({
         focus: data.focus || undefined,
       });
 
+      // Clear error on success
+      setError(null);
+
       setPlan(response);
       setGoal(response.goal);
       // Select all suggested todos by default
       setSelectedTodoIds(new Set(response.todoIds));
     } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.code === 'RATE_LIMITED') {
-          setError('Too many requests. Please wait a minute before trying again.');
-        } else if (err.code === 'AI_ERROR') {
-          setError(err.message || 'The AI encountered an error. Please try again in a moment.');
-        } else {
-          setError(err.message || 'Failed to generate plan. Please try again.');
-        }
-      } else {
-        setError('Network error. Please check your connection and try again.');
-      }
+      // Use safe error message mapper - never expose raw provider errors
+      setError(getSafeAiErrorMessage(err));
     }
   };
 
@@ -131,12 +125,9 @@ export function PlanSprintDialog({
 
       // Close dialog on success
       handleClose();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message || 'Failed to create sprint. Please try again.');
-      } else {
-        setError('Network error. Please check your connection and try again.');
-      }
+    } catch {
+      // For save errors, show a generic message (not AI-specific)
+      setError('Failed to create sprint. Please try again.');
     }
   };
 
