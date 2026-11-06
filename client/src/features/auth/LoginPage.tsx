@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Box,
   Card,
@@ -8,7 +9,11 @@ import {
   Container,
   Alert,
   CircularProgress,
+  IconButton,
+  InputAdornment,
 } from '@mui/material';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -29,6 +34,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const setSession = useAuthStore((state) => state.setSession);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -77,23 +83,30 @@ export function LoginPage() {
       }}
     >
       <Container maxWidth="sm">
-        <Box sx={{ textAlign: 'center', mb: 4 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-            <img
-              src="/brand/kanbot-logo.svg"
-              alt="Kanbot"
-              style={{ height: 48 }}
-            />
+        <Card 
+          sx={{ 
+            p: { xs: 3, sm: 4 },
+            boxShadow: 3,
+          }}
+        >
+          {/* Header */}
+          <Box sx={{ textAlign: 'center', mb: 3 }}>
+            <Typography 
+              variant="h4" 
+              gutterBottom 
+              sx={{ 
+                fontWeight: 700,
+                fontSize: { xs: '1.75rem', sm: '2.125rem' },
+                mb: 1,
+              }}
+            >
+              Welcome back
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Log in to your account to continue
+            </Typography>
           </Box>
-          <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
-            Welcome back
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Log in to your account to continue
-          </Typography>
-        </Box>
 
-        <Card sx={{ p: 4 }}>
           {serverError && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {serverError}
@@ -111,23 +124,49 @@ export function LoginPage() {
               margin="normal"
               autoFocus
               disabled={loginMutation.isPending}
+              slotProps={{
+                htmlInput: {
+                  autoComplete: 'email',
+                },
+              }}
             />
             <TextField
               fullWidth
               label="Password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               {...register('password')}
               error={!!errors.password}
               helperText={errors.password?.message}
               margin="normal"
               disabled={loginMutation.isPending}
+              slotProps={{
+                htmlInput: {
+                  autoComplete: 'current-password',
+                },
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        onClick={() => setShowPassword(!showPassword)}
+                        onMouseDown={(e) => e.preventDefault()}
+                        edge="end"
+                        disabled={loginMutation.isPending}
+                        tabIndex={0}
+                      >
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
             <Button
               fullWidth
               type="submit"
               variant="contained"
               size="large"
-              sx={{ mt: 3, mb: 2 }}
+              sx={{ mt: 3, mb: 2.5 }}
               disabled={loginMutation.isPending}
               startIcon={loginMutation.isPending ? <CircularProgress size={20} /> : undefined}
             >
@@ -135,7 +174,7 @@ export function LoginPage() {
             </Button>
           </form>
 
-          <Typography variant="body2" align="center" color="text.secondary">
+          <Typography variant="body2" align="center" color="text.secondary" sx={{ mt: 2 }}>
             Don't have an account?{' '}
             <Link
               component="button"

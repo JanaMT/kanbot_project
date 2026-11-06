@@ -49,22 +49,27 @@ export function ProjectCard({ project, onMenuClick }: ProjectCardProps) {
     >
       <CardContent sx={{ flexGrow: 1, minWidth: 0 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2, minWidth: 0 }}>
-          <Box
-            sx={{
-              width: 48,
-              height: 48,
-              borderRadius: 2,
-              bgcolor: 'primary.main',
-              color: 'primary.contrastText',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '1.25rem',
-              fontWeight: 700,
-              flexShrink: 0,
-            }}
-          >
-            {project.key}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, flex: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, wordBreak: 'break-word', mb: 0 }}>
+              {project.name}
+            </Typography>
+            <Chip
+              label={project.key}
+              size="small"
+              sx={{
+                height: 22,
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
+                alignSelf: 'flex-start',
+                '& .MuiChip-label': {
+                  px: 1,
+                  whiteSpace: 'nowrap',
+                },
+              }}
+              title={project.key}
+            />
           </Box>
           <IconButton
             size="small"
@@ -73,15 +78,11 @@ export function ProjectCard({ project, onMenuClick }: ProjectCardProps) {
               onMenuClick(e, project);
             }}
             aria-label="Project options"
-            sx={{ flexShrink: 0 }}
+            sx={{ flexShrink: 0, ml: 1 }}
           >
             <MoreVertIcon />
           </IconButton>
         </Box>
-
-        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
-          {project.name}
-        </Typography>
 
         {project.description && (
           <Typography

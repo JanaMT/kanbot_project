@@ -1,9 +1,6 @@
-import { AppBar, Toolbar, Typography, Button, IconButton, Tooltip } from '@mui/material';
+import { AppBar, Toolbar, Button, IconButton, Box } from '@mui/material';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
-import LightModeIcon from '@mui/icons-material/LightMode';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
 import MenuIcon from '@mui/icons-material/Menu';
-import { useThemeMode } from '../theme/ThemeProvider';
 
 interface TopBarProps {
   onAskAI: () => void;
@@ -12,8 +9,6 @@ interface TopBarProps {
 }
 
 export function TopBar({ onAskAI, onMenuClick, showMenuButton }: TopBarProps) {
-  const { mode, toggleTheme } = useThemeMode();
-
   return (
     <AppBar
       position="static"
@@ -25,7 +20,13 @@ export function TopBar({ onAskAI, onMenuClick, showMenuButton }: TopBarProps) {
         borderColor: 'divider',
       }}
     >
-      <Toolbar sx={{ gap: 1 }}>
+      <Toolbar 
+        sx={{ 
+          gap: 1,
+          minHeight: { xs: 56, sm: 64 },
+          px: { xs: 2, sm: 3 },
+        }}
+      >
         {showMenuButton && onMenuClick && (
           <IconButton
             color="inherit"
@@ -37,35 +38,26 @@ export function TopBar({ onAskAI, onMenuClick, showMenuButton }: TopBarProps) {
             <MenuIcon />
           </IconButton>
         )}
-        <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>
-          {/* Page title will be set by individual pages */}
-        </Typography>
-        <Tooltip title={mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}>
-          <IconButton
-            onClick={toggleTheme}
-            color="inherit"
-            aria-label={mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-          >
-            {mode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
-          </IconButton>
-        </Tooltip>
+        <Box sx={{ flexGrow: 1 }} />
         <Button
           variant="contained"
-          startIcon={<SmartToyIcon sx={{ display: { xs: 'none', sm: 'block' } }} />}
+          startIcon={<SmartToyIcon />}
           onClick={onAskAI}
-          size="small"
           sx={{
-            bgcolor: mode === 'light' ? '#334155' : 'primary.main',
-            color: mode === 'light' ? '#FFFFFF' : 'primary.contrastText',
+            bgcolor: 'primary.main',
+            color: 'primary.contrastText',
+            px: 2.5,
+            py: 0.75,
+            fontWeight: 500,
+            textTransform: 'none',
+            boxShadow: 'none',
             '&:hover': {
-              bgcolor: mode === 'light' ? '#1e293b' : 'primary.dark',
+              bgcolor: 'primary.dark',
+              boxShadow: '0 2px 8px rgba(15, 23, 42, 0.15)',
             },
-            px: { xs: 1.5, sm: 2 },
-            minWidth: { xs: 'auto', sm: 'auto' },
           }}
         >
-          <Typography sx={{ display: { xs: 'none', sm: 'inline' } }}>Ask AI</Typography>
-          <Typography sx={{ display: { xs: 'inline', sm: 'none' } }}>AI</Typography>
+          Ask AI
         </Button>
       </Toolbar>
     </AppBar>

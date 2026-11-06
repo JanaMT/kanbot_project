@@ -57,9 +57,9 @@ export function AppThemeProvider({ children }: AppThemeProviderProps) {
           mode,
           ...(mode === 'light'
             ? {
-                // Light mode
+                // Light mode - Softer, less harsh
                 primary: {
-                  main: '#0F172A',
+                  main: '#1E293B',        // Softer navy (was #0F172A - too dark)
                   contrastText: '#FFFFFF',
                 },
                 secondary: {
@@ -67,11 +67,11 @@ export function AppThemeProvider({ children }: AppThemeProviderProps) {
                   contrastText: '#FFFFFF',
                 },
                 background: {
-                  default: '#F8FAFC',
+                  default: '#F8FAFC',     // Soft blue-grey background
                   paper: '#FFFFFF',
                 },
                 text: {
-                  primary: '#0F172A',
+                  primary: '#1E293B',     // Softer text (was #0F172A)
                   secondary: '#64748B',
                 },
                 divider: '#E2E8F0',
@@ -83,6 +83,12 @@ export function AppThemeProvider({ children }: AppThemeProviderProps) {
                 },
                 error: {
                   main: '#DC2626',
+                },
+                action: {
+                  hover: 'rgba(0, 0, 0, 0.04)',      // Softer hover
+                  selected: 'rgba(0, 0, 0, 0.08)',   // Softer selection
+                  disabled: 'rgba(0, 0, 0, 0.26)',
+                  disabledBackground: 'rgba(0, 0, 0, 0.12)',
                 },
               }
             : {
