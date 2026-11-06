@@ -48,7 +48,10 @@ export function useCreateProject() {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        // Skip showing error for 401 - already handled by global interceptor
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to create project', { variant: 'error' });
       }
@@ -70,7 +73,10 @@ export function useUpdateProject() {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        // Skip showing error for 401 - already handled by global interceptor
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to update project', { variant: 'error' });
       }
@@ -90,7 +96,10 @@ export function useDeleteProject() {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        // Skip showing error for 401 - already handled by global interceptor
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to delete project', { variant: 'error' });
       }

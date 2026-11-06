@@ -91,7 +91,9 @@ export function useMoveBoardTodo() {
       }
 
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to move todo', { variant: 'error' });
       }

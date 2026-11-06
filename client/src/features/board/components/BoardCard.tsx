@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { PriorityBadge } from '../../../shared/components/PriorityBadge';
 import { TypeIcon } from '../../../shared/components/TypeIcon';
+import { LabelChip } from '../../../shared/components/LabelChip';
 import type { Todo } from '../../../shared/types/api';
 
 interface BoardCardProps {
@@ -74,13 +75,22 @@ export function BoardCard({ todo, onClick }: BoardCardProps) {
           )}
         </Box>
 
-        {todo.labels.length > 0 && (
+        {todo.labels && todo.labels.length > 0 && (
           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 1 }}>
             {todo.labels.slice(0, 3).map((label) => (
-              <Chip key={label} label={label} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+              <LabelChip
+                key={label}
+                label={label}
+                sx={{ height: 20, fontSize: '0.7rem' }}
+              />
             ))}
             {todo.labels.length > 3 && (
-              <Chip label={`+${todo.labels.length - 3}`} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+              <Chip
+                label={`+${todo.labels.length - 3}`}
+                size="small"
+                variant="outlined"
+                sx={{ height: 20, fontSize: '0.7rem' }}
+              />
             )}
           </Box>
         )}

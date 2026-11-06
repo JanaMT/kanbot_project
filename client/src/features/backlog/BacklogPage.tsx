@@ -20,6 +20,7 @@ import ClearIcon from '@mui/icons-material/Clear';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
 import AddIcon from '@mui/icons-material/Add';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { EmptyState } from '../../shared/components/EmptyState';
 import { LoadingState } from '../../shared/components/LoadingState';
 import { ErrorState } from '../../shared/components/ErrorState';
@@ -70,6 +71,7 @@ export function BacklogPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<TodoPriority | ''>('');
   const [typeFilter, setTypeFilter] = useState<TodoType | ''>('');
+  const [labelFilter, setLabelFilter] = useState<string[]>([]);
 
   // Debounce search input (300ms)
   useEffect(() => {
@@ -104,12 +106,34 @@ export function BacklogPage() {
   const { data: sprints = [] } = useSprints(projectId || '');
   const moveMutation = useMoveTodo();
 
-  const hasActiveFilters = !!(debouncedSearch || priorityFilter || typeFilter);
+  // Get all available labels from todos
+  const availableLabels = useMemo(() => {
+    if (!todos) return [];
+    const labelSet = new Set<string>();
+    todos.forEach(todo => {
+      if (todo.labels && Array.isArray(todo.labels)) {
+        todo.labels.forEach(label => labelSet.add(label));
+      }
+    });
+    return Array.from(labelSet).sort();
+  }, [todos]);
+
+  // Filter todos by selected labels locally
+  const filteredTodos = useMemo(() => {
+    if (!todos || labelFilter.length === 0) return todos || [];
+    return todos.filter(todo => {
+      if (!todo.labels || todo.labels.length === 0) return false;
+      // Show todo if it contains at least one selected label
+      return labelFilter.some(selectedLabel => todo.labels.includes(selectedLabel));
+    });
+  }, [todos, labelFilter]);
+
+  const hasActiveFilters = !!(debouncedSearch || priorityFilter || typeFilter || labelFilter.length > 0);
 
   const totalStoryPoints = useMemo(() => {
-    if (!todos) return 0;
-    return todos.reduce((sum, todo) => sum + (todo.storyPoints || 0), 0);
-  }, [todos]);
+    if (!filteredTodos) return 0;
+    return filteredTodos.reduce((sum, todo) => sum + (todo.storyPoints || 0), 0);
+  }, [filteredTodos]);
 
   const handleTodoClick = (todo: Todo) => {
     setSelectedTodo(todo);
@@ -124,8 +148,11 @@ export function BacklogPage() {
   const handleDeleteClick = () => {
     if (selectedTodo) {
       setTodoToDelete(selectedTodo);
-      setDeleteDialogOpen(true);
       setDetailsOpen(false);
+      // Use setTimeout to ensure details dialog is fully closed before opening delete dialog
+      setTimeout(() => {
+        setDeleteDialogOpen(true);
+      }, 0);
     }
   };
 
@@ -139,6 +166,7 @@ export function BacklogPage() {
     setDebouncedSearch('');
     setPriorityFilter('');
     setTypeFilter('');
+    setLabelFilter([]);
   }, []);
 
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,7 +265,11 @@ export function BacklogPage() {
   }, []);
 
   const handleJumpToBacklog = useCallback(() => {
-    backlogSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    backlogSectionRef.current?.scrollIntoView({ 
+      behavior: prefersReducedMotion ? 'auto' : 'smooth', 
+      block: 'start' 
+    });
   }, []);
 
   const handleCreateTodoClick = useCallback(() => {
@@ -266,7 +298,6 @@ export function BacklogPage() {
   // Get planned sprints count
   const plannedSprints = sprints.filter((s) => s.status === 'planned');
   const hasPlannedSprints = plannedSprints.length > 0;
-  const hasManyPlannedSprints = plannedSprints.length >= 2;
 
   // Only show empty state if no todos AND no planned sprints
   if (!todos || (todos.length === 0 && !hasActiveFilters && !hasPlannedSprints)) {
@@ -300,7 +331,7 @@ export function BacklogPage() {
 
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto', width: '100%', position: 'relative', pb: 10 }}>
-      {/* Header */}
+      {/* Header Row 1 */}
       <Box
         sx={{
           display: 'flex',
@@ -308,25 +339,15 @@ export function BacklogPage() {
           justifyContent: 'space-between',
           alignItems: { xs: 'stretch', sm: 'center' },
           gap: 2,
-          mb: 3,
+          mb: 2,
         }}
       >
-        <Box sx={{ minWidth: 0 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography
-              variant="h4"
-              gutterBottom
-              sx={{ fontWeight: 700, fontSize: { xs: '1.75rem', md: '2.125rem' } }}
-            >
-              Backlog
-            </Typography>
-            {isFetching && <CircularProgress size={24} sx={{ mb: 1 }} />}
-          </Box>
-          <Typography variant="body2" color="text.secondary">
-            {todos.length} {todos.length === 1 ? 'todo' : 'todos'} · {totalStoryPoints} story
-            points
-          </Typography>
-        </Box>
+        <Typography
+          variant="h4"
+          sx={{ fontWeight: 700, fontSize: { xs: '1.75rem', md: '2.125rem' } }}
+        >
+          Backlog
+        </Typography>
         <Box sx={{ display: 'flex', gap: 1, flexDirection: { xs: 'column', sm: 'row' } }}>
           <Button
             variant="outlined"
@@ -345,6 +366,36 @@ export function BacklogPage() {
             Generate with AI
           </Button>
         </Box>
+      </Box>
+
+      {/* Header Row 2: Summary and View Backlog Button */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Typography variant="body2" color="text.secondary">
+            {todos ? todos.length : 0} {todos && todos.length === 1 ? 'todo' : 'todos'} · {totalStoryPoints} story points
+          </Typography>
+          {isFetching && <CircularProgress size={16} />}
+        </Box>
+        {hasPlannedSprints && (
+          <Button
+            variant="text"
+            size="small"
+            onClick={handleJumpToBacklog}
+            startIcon={<KeyboardArrowDownIcon />}
+            sx={{ color: 'text.secondary' }}
+            aria-label="View backlog todos"
+          >
+            View backlog todos
+          </Button>
+        )}
       </Box>
 
       {/* Planned Sprints */}
@@ -368,20 +419,29 @@ export function BacklogPage() {
       {hasPlannedSprints && (
         <>
           <Divider sx={{ my: 3 }} />
-          <Box ref={backlogSectionRef} sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+          <Box
+            ref={backlogSectionRef}
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              justifyContent: 'space-between',
+              alignItems: { xs: 'stretch', sm: 'center' },
+              gap: 2,
+              mb: 2,
+            }}
+          >
             <Typography variant="h5" sx={{ fontWeight: 600 }}>
-              Backlog
+              Backlog todos
             </Typography>
-            {hasManyPlannedSprints && (
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={handleCreateTodoClick}
-                startIcon={<AddIcon />}
-              >
-                Quick Create
-              </Button>
-            )}
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={handleCreateTodoClick}
+              sx={{ flexShrink: 0 }}
+            >
+              Create Todo
+            </Button>
           </Box>
         </>
       )}
@@ -416,7 +476,7 @@ export function BacklogPage() {
         />
 
         {/* Priority Filter */}
-        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
+        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 120 } }}>
           <InputLabel>Priority</InputLabel>
           <Select
             value={priorityFilter}
@@ -433,7 +493,7 @@ export function BacklogPage() {
         </FormControl>
 
         {/* Type Filter */}
-        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
+        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 120 } }}>
           <InputLabel>Type</InputLabel>
           <Select
             value={typeFilter}
@@ -446,6 +506,38 @@ export function BacklogPage() {
                 {type.charAt(0).toUpperCase() + type.slice(1)}
               </MenuItem>
             ))}
+          </Select>
+        </FormControl>
+
+        {/* Label Filter */}
+        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
+          <InputLabel>Label</InputLabel>
+          <Select
+            multiple
+            value={labelFilter}
+            onChange={(e) => {
+              const value = e.target.value;
+              setLabelFilter(typeof value === 'string' ? value.split(',') : value);
+            }}
+            label="Label"
+            renderValue={(selected) =>
+              selected.length === 0 ? 'All labels' : `${selected.length} selected`
+            }
+          >
+            {availableLabels.length === 0 ? (
+              <MenuItem disabled>No labels available</MenuItem>
+            ) : (
+              availableLabels.map((label) => (
+                <MenuItem key={label} value={label}>
+                  <Chip
+                    label={label}
+                    size="small"
+                    sx={{ mr: 1 }}
+                  />
+                  {label}
+                </MenuItem>
+              ))
+            )}
           </Select>
         </FormControl>
       </Box>
@@ -469,6 +561,12 @@ export function BacklogPage() {
               size="small"
             />
           )}
+          {labelFilter.length > 0 && (
+            <Chip
+              label={`Labels: ${labelFilter.length} selected`}
+              size="small"
+            />
+          )}
           <Button size="small" onClick={handleClearFilters}>
             Clear all
           </Button>
@@ -483,11 +581,11 @@ export function BacklogPage() {
       )}
 
       {/* Todo List */}
-      {todos.length === 0 ? (
+      {filteredTodos.length === 0 ? (
         hasActiveFilters ? (
           <Box sx={{ textAlign: 'center', py: 8 }}>
             <Typography variant="h6" color="text.secondary" gutterBottom>
-              No todos match your filters
+              No todos match the selected filters
             </Typography>
             <Button onClick={handleClearFilters} sx={{ mt: 2 }}>
               Clear filters
@@ -505,7 +603,7 @@ export function BacklogPage() {
         )
       ) : (
         <TodoList
-          todos={todos}
+          todos={filteredTodos}
           onTodoClick={handleTodoClick}
           onReorder={handleReorder}
           onMoveClick={handleMoveClick}
@@ -515,46 +613,6 @@ export function BacklogPage() {
 
       {/* Quick Create */}
       <QuickCreateTodo ref={quickCreateRef} projectId={projectId} />
-
-      {/* Sticky Quick Create Bar (when many sprints) */}
-      {hasManyPlannedSprints && (
-        <Box
-          sx={{
-            position: 'sticky',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            bgcolor: 'background.paper',
-            borderTop: '1px solid',
-            borderColor: 'divider',
-            p: 2,
-            mt: 2,
-            boxShadow: 3,
-            zIndex: 10,
-            display: 'flex',
-            gap: 2,
-            alignItems: 'center',
-            flexWrap: 'wrap',
-          }}
-        >
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={handleJumpToBacklog}
-            startIcon={<FormatListBulletedIcon />}
-          >
-            Jump to Backlog
-          </Button>
-          <Button
-            variant="contained"
-            size="small"
-            onClick={handleCreateTodoClick}
-            startIcon={<AddIcon />}
-          >
-            Create Todo
-          </Button>
-        </Box>
-      )}
 
       {/* Todo Details Dialog */}
       <TodoDetailsDialog

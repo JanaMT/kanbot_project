@@ -3,6 +3,7 @@ import MoveIcon from '@mui/icons-material/DriveFileMove';
 import type { Todo } from '../../../shared/types/api';
 import { PriorityBadge } from '../../../shared/components/PriorityBadge';
 import { TypeIcon } from '../../../shared/components/TypeIcon';
+import { LabelChip } from '../../../shared/components/LabelChip';
 import type { MouseEvent } from 'react';
 
 interface TodoRowProps {
@@ -93,7 +94,7 @@ export function TodoRow({ todo, onClick, onMoveClick, showMoveButton = false }: 
       {todo.labels && todo.labels.length > 0 && (
         <Box sx={{ display: { xs: 'none', lg: 'flex' }, gap: 0.5, flexShrink: 0 }}>
           {todo.labels.slice(0, 2).map((label) => (
-            <Chip key={label} label={label} size="small" variant="outlined" />
+            <LabelChip key={label} label={label} />
           ))}
           {todo.labels.length > 2 && (
             <Chip label={`+${todo.labels.length - 2}`} size="small" variant="outlined" />

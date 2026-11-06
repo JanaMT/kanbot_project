@@ -15,6 +15,7 @@ export function ProjectsPage() {
   const { data: projects, isLoading, error, refetch } = useProjects();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedProject, setSelectedProject] = useState<ProjectWithStats | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<ProjectWithStats | null>(null);
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectWithStats | null>(null);
@@ -26,7 +27,7 @@ export function ProjectsPage() {
 
   const handleMenuClose = () => {
     setAnchorEl(null);
-    setSelectedProject(null);
+    // Don't clear selectedProject here - keep it for menu actions
   };
 
   const handleCreateClick = () => {
@@ -41,8 +42,17 @@ export function ProjectsPage() {
   };
 
   const handleDeleteClick = () => {
-    setDeleteDialogOpen(true);
-    handleMenuClose();
+    if (selectedProject) {
+      setProjectToDelete(selectedProject);
+      handleMenuClose();
+      setDeleteDialogOpen(true);
+    }
+  };
+
+  const handleDeleteDialogClose = () => {
+    setDeleteDialogOpen(false);
+    setProjectToDelete(null);
+    setSelectedProject(null);
   };
 
   if (isLoading) {
@@ -140,8 +150,8 @@ export function ProjectsPage() {
 
       <DeleteProjectDialog
         open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        project={selectedProject}
+        onClose={handleDeleteDialogClose}
+        project={projectToDelete}
       />
     </Box>
   );

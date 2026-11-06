@@ -116,8 +116,8 @@ export function StartSprintDialog({
             )}
 
             {hasActiveSprint && (
-              <Alert severity="error">
-                Another sprint is already active. Complete it before starting a new one.
+              <Alert severity="warning">
+                Another sprint is already active. Complete it before starting a new sprint.
               </Alert>
             )}
 

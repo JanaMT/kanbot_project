@@ -218,7 +218,7 @@ export function SprintFormDialog({
             <Button
               type="submit"
               variant="contained"
-              disabled={isSubmitting || !isDirty || !isEditable}
+              disabled={isSubmitting || (isEdit && !isDirty) || !isEditable}
             >
               {isSubmitting ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Sprint'}
             </Button>

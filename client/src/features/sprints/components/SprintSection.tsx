@@ -13,6 +13,7 @@ import {
   ListItemText,
   Divider,
   CircularProgress,
+  Tooltip,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -152,18 +153,29 @@ export function SprintSection({
         </Box>
 
         {canStart && (
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<PlayArrowIcon />}
-            onClick={(e) => {
-              e.stopPropagation();
-              onStart();
-            }}
-            disabled={hasActiveSprint}
+          <Tooltip
+            title={
+              hasActiveSprint
+                ? 'You cannot start this sprint while another sprint is active. Complete the active sprint first.'
+                : ''
+            }
+            arrow
           >
-            Start Sprint
-          </Button>
+            <span>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<PlayArrowIcon />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStart();
+                }}
+                disabled={hasActiveSprint}
+              >
+                Start Sprint
+              </Button>
+            </span>
+          </Tooltip>
         )}
 
         <IconButton

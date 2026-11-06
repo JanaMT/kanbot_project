@@ -17,6 +17,7 @@ import type {
   UpdateSprintRequest,
   StartSprintRequest,
   CompleteSprintRequest,
+  Sprint,
 } from '../../../shared/types/api';
 import { todoKeys } from '../../backlog/api/queries';
 
@@ -70,7 +71,9 @@ export function useCreateSprint(projectId: string) {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to create sprint', { variant: 'error' });
       }
@@ -92,7 +95,9 @@ export function useUpdateSprint() {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to update sprint', { variant: 'error' });
       }
@@ -115,7 +120,9 @@ export function useDeleteSprint(projectId: string) {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to delete sprint', { variant: 'error' });
       }
@@ -141,7 +148,7 @@ export function useStartSprint(projectId: string) {
           enqueueSnackbar('Another sprint is already active. Complete it first.', {
             variant: 'error',
           });
-        } else {
+        } else if (error.status !== 401) {
           enqueueSnackbar(error.message, { variant: 'error' });
         }
       } else {
@@ -165,7 +172,9 @@ export function useCompleteSprint(projectId: string) {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to complete sprint', { variant: 'error' });
       }
@@ -200,8 +209,8 @@ export function useGenerateSprintSummary(sprintId: string) {
           enqueueSnackbar('Too many requests. Please wait a minute before trying again.', {
             variant: 'error',
           });
-        } else {
-          // For non-AI errors, show the error
+        } else if (error.status !== 401) {
+          // For non-AI errors, show the error (except 401)
           enqueueSnackbar(error.message, { variant: 'error' });
         }
       } else {
@@ -214,3 +223,8 @@ export function useGenerateSprintSummary(sprintId: string) {
 
 // Helper to get field errors from API error
 export { getFieldErrors } from '../../backlog/api/queries';
+
+// Helper to find active sprint
+export function getActiveSprint(sprints: Sprint[]): Sprint | undefined {
+  return sprints.find((sprint) => sprint.status === 'active');
+}

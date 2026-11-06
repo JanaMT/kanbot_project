@@ -22,7 +22,21 @@ export function AuthBootstrap({ children }: AuthBootstrapProps) {
 
   // Setup auth token getter for API client
   useEffect(() => {
-    setAuthTokenGetter(() => useAuthStore.getState().token);
+    setAuthTokenGetter(() => {
+      // Always read from localStorage as the single source of truth
+      // Do NOT fall back to Zustand in-memory state to ensure runtime changes are respected
+      try {
+        const stored = localStorage.getItem('kanbot-auth');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return parsed.state?.token || null;
+        }
+      } catch {
+        // If parsing fails, no token available
+        return null;
+      }
+      return null;
+    });
   }, []);
 
   // Setup session expired handler

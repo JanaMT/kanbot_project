@@ -15,10 +15,11 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import EventIcon from '@mui/icons-material/Event';
 import SummarizeIcon from '@mui/icons-material/Summarize';
-import { useParams } from 'react-router';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import { useParams, useNavigate } from 'react-router';
 import { useAiStatus, useChat as useChatMutation } from '../api/queries';
 import { useChat } from '../hooks/useChat';
-import { useSprints } from '../../sprints/api/queries';
+import { useSprints, useGenerateSprintSummary, getActiveSprint } from '../../sprints/api/queries';
 import { AiStatusBadge } from './AiStatusBadge';
 import { ChatMessage } from './ChatMessage';
 import { ChatWelcome } from './ChatWelcome';
@@ -26,6 +27,7 @@ import { ChatInput } from './ChatInput';
 import { GenerateTodosDialog } from './GenerateTodosDialog';
 import { PlanSprintDialog } from './PlanSprintDialog';
 import { getSafeAiErrorMessage } from '../utils/errorMessages';
+import { routes } from '../../../app/navigation';
 
 interface AiDrawerProps {
   open: boolean;
@@ -36,6 +38,7 @@ const DRAWER_WIDTH = 440;
 
 export function AiDrawer({ open, onClose }: AiDrawerProps) {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
   const { data: aiStatus, isLoading: isLoadingStatus } = useAiStatus();
   const { data: sprints = [] } = useSprints(projectId || '');
   const chatMutation = useChatMutation(projectId || '');
@@ -45,6 +48,16 @@ export function AiDrawer({ open, onClose }: AiDrawerProps) {
   const [isThinking, setIsThinking] = useState(false);
   const [generateTodosOpen, setGenerateTodosOpen] = useState(false);
   const [planSprintOpen, setPlanSprintOpen] = useState(false);
+  
+  // Sprint summary state - compact status only
+  const [summaryStatus, setSummaryStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  // Get active sprint
+  const activeSprint = getActiveSprint(sprints);
+  
+  // Sprint summary mutation
+  const generateSummaryMutation = useGenerateSprintSummary(activeSprint?.id || '');
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -97,6 +110,39 @@ export function AiDrawer({ open, onClose }: AiDrawerProps) {
     clearMessages();
     setError(null);
     setIsThinking(false);
+    setSummaryStatus('idle');
+    setSummaryError(null);
+  };
+
+  const handleGenerateSprintSummary = async () => {
+    if (!activeSprint) {
+      setError('There is no active sprint to summarize. Start a sprint first.');
+      return;
+    }
+
+    // Set generating status
+    setSummaryStatus('generating');
+    setSummaryError(null);
+    setError(null);
+
+    try {
+      await generateSummaryMutation.mutateAsync();
+      setSummaryStatus('success');
+      setSummaryError(null);
+    } catch (err) {
+      setSummaryStatus('error');
+      setSummaryError(getSafeAiErrorMessage(err));
+    }
+  };
+
+  const handleViewSummary = () => {
+    if (!projectId) return;
+    
+    // Close the drawer
+    onClose();
+    
+    // Navigate to board page where the summary card is displayed
+    navigate(routes.projectBoard(projectId));
   };
 
   const handleQuickAction = (action: string) => {
@@ -104,11 +150,8 @@ export function AiDrawer({ open, onClose }: AiDrawerProps) {
       setGenerateTodosOpen(true);
     } else if (action === 'Plan sprint') {
       setPlanSprintOpen(true);
-    } else {
-      // Placeholder for future implementation
-      setError(
-        `"${action}" will be implemented in the next update. For now, please ask me questions about your project.`
-      );
+    } else if (action === 'Summarize sprint') {
+      handleGenerateSprintSummary();
     }
   };
 
@@ -162,7 +205,7 @@ export function AiDrawer({ open, onClose }: AiDrawerProps) {
             )}
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5 }}>
-            {messages.length > 0 && (
+            {(messages.length > 0 || summaryStatus !== 'idle') && (
               <IconButton
                 size="small"
                 onClick={handleNewChat}
@@ -206,8 +249,9 @@ export function AiDrawer({ open, onClose }: AiDrawerProps) {
               size="small"
               startIcon={<SummarizeIcon />}
               onClick={() => handleQuickAction('Summarize sprint')}
-              disabled={!projectId || isThinking}
+              disabled={!projectId || !activeSprint || summaryStatus === 'generating'}
               sx={{ justifyContent: 'flex-start' }}
+              title={!activeSprint ? 'No active sprint' : undefined}
             >
               Summarize sprint
             </Button>
@@ -229,57 +273,106 @@ export function AiDrawer({ open, onClose }: AiDrawerProps) {
             <Alert severity="info" sx={{ mt: 2 }}>
               Please select a project to start chatting with the AI assistant.
             </Alert>
-          ) : messages.length === 0 && !isThinking ? (
-            <ChatWelcome />
           ) : (
             <>
-              {messages.map((message, index) => (
-                <ChatMessage key={index} message={message} />
-              ))}
-
-              {isThinking && (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    gap: 1.5,
-                    mb: 2,
-                  }}
+              {/* Compact Summary Status - shown above chat messages */}
+              {summaryStatus === 'generating' && (
+                <Alert
+                  severity="info"
+                  icon={<CircularProgress size={20} />}
+                  sx={{ mb: 2 }}
                 >
-                  <Box
-                    sx={{
-                      width: 32,
-                      height: 32,
-                      flexShrink: 0,
-                    }}
-                  />
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      color: 'text.secondary',
-                    }}
-                  >
-                    <CircularProgress size={16} />
-                    <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
-                      Thinking...
-                    </Typography>
-                  </Box>
-                </Box>
+                  Generating sprint summary...
+                </Alert>
               )}
 
-              {error && (
+              {summaryStatus === 'success' && (
+                <Alert
+                  severity="success"
+                  sx={{ mb: 2 }}
+                  action={
+                    <Button
+                      color="inherit"
+                      size="small"
+                      startIcon={<VisibilityIcon />}
+                      onClick={handleViewSummary}
+                    >
+                      View summary
+                    </Button>
+                  }
+                >
+                  Sprint summary generated successfully.
+                </Alert>
+              )}
+
+              {summaryStatus === 'error' && (
                 <Alert
                   severity="error"
                   sx={{ mb: 2 }}
                   action={
-                    <Button color="inherit" size="small" onClick={handleRetry}>
+                    <Button color="inherit" size="small" onClick={handleGenerateSprintSummary}>
                       Try again
                     </Button>
                   }
                 >
-                  {error}
+                  {summaryError || 'Failed to generate summary. Please try again.'}
                 </Alert>
+              )}
+
+              {/* Chat Messages */}
+              {messages.length === 0 && !isThinking ? (
+                <ChatWelcome />
+              ) : (
+                <>
+                  {messages.map((message, index) => (
+                    <ChatMessage key={index} message={message} />
+                  ))}
+
+                  {isThinking && (
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        gap: 1.5,
+                        mb: 2,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          color: 'text.secondary',
+                        }}
+                      >
+                        <CircularProgress size={16} />
+                        <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                          Thinking...
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {error && (
+                    <Alert
+                      severity="error"
+                      sx={{ mb: 2 }}
+                      action={
+                        <Button color="inherit" size="small" onClick={handleRetry}>
+                          Try again
+                        </Button>
+                      }
+                    >
+                      {error}
+                    </Alert>
+                  )}
+                </>
               )}
 
               <div ref={messagesEndRef} />

@@ -62,7 +62,9 @@ export function useCreateTodo(projectId: string) {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to create todo', { variant: 'error' });
       }
@@ -78,7 +80,21 @@ export function useUpdateTodo() {
     mutationFn: ({ todoId, data }: { todoId: string; data: UpdateTodoRequest }) =>
       updateTodo(todoId, data),
     onSuccess: (updatedTodo) => {
-      // Invalidate all lists and the specific todo detail
+      // Update the specific todo in cache immediately with server response
+      queryClient.setQueryData(todoKeys.detail(updatedTodo.id), updatedTodo);
+      
+      // Update the todo in all list caches
+      queryClient.setQueriesData<Todo[]>(
+        { queryKey: todoKeys.lists() },
+        (oldTodos) => {
+          if (!oldTodos) return oldTodos;
+          return oldTodos.map((todo) =>
+            todo.id === updatedTodo.id ? updatedTodo : todo
+          );
+        }
+      );
+      
+      // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: todoKeys.lists() });
       queryClient.invalidateQueries({ queryKey: todoKeys.detail(updatedTodo.id) });
       // Invalidate board queries since the todo might be on the board
@@ -89,7 +105,9 @@ export function useUpdateTodo() {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to update todo', { variant: 'error' });
       }
@@ -110,7 +128,9 @@ export function useDeleteTodo() {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to delete todo', { variant: 'error' });
       }
@@ -194,7 +214,9 @@ export function useMoveTodo() {
       }
 
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to move todo', { variant: 'error' });
       }
@@ -236,7 +258,9 @@ export function useBulkCreateTodos(projectId: string) {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        enqueueSnackbar(error.message, { variant: 'error' });
+        if (error.status !== 401) {
+          enqueueSnackbar(error.message, { variant: 'error' });
+        }
       } else {
         enqueueSnackbar('Failed to create todos', { variant: 'error' });
       }

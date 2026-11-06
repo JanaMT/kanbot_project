@@ -8,7 +8,6 @@ import {
   TextField,
   Box,
   MenuItem,
-  Chip,
   IconButton,
   Typography,
   FormControl,
@@ -27,6 +26,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { todoSchema, type TodoFormData } from '../validation/todoSchema';
 import { useUpdateTodo, useMoveTodo, getFieldErrors } from '../api/queries';
 import { ApiError } from '../../../shared/api/client';
+import { LabelChip } from '../../../shared/components/LabelChip';
 import type { Todo, UpdateTodoRequest, Sprint } from '../../../shared/types/api';
 import {
   TODO_TYPES,
@@ -97,6 +97,12 @@ export function TodoDetailsDialog({
     if (!todo) return;
 
     try {
+      // Normalize labels: trim whitespace and remove empty/duplicate values
+      // Always send as array (empty array if no labels)
+      const normalizedLabels = data.labels && Array.isArray(data.labels)
+        ? Array.from(new Set(data.labels.map(l => l.trim()).filter(l => l.length > 0)))
+        : [];
+
       const payload: UpdateTodoRequest = {
         title: data.title,
         description: data.description || undefined,
@@ -104,7 +110,7 @@ export function TodoDetailsDialog({
         status: data.status,
         priority: data.priority,
         storyPoints: data.storyPoints as 1 | 2 | 3 | 5 | 8 | 13 | null | undefined,
-        labels: data.labels,
+        labels: normalizedLabels,
         dueDate: data.dueDate || null,
         sprintId: data.sprintId === 'backlog' ? null : data.sprintId,
       };
@@ -374,14 +380,13 @@ export function TodoDetailsDialog({
                     </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                       {value.map((label, index) => (
-                        <Chip
+                        <LabelChip
                           key={index}
                           label={label}
                           onDelete={() => {
                             const newLabels = value.filter((_, i) => i !== index);
                             onChange(newLabels);
                           }}
-                          size="small"
                         />
                       ))}
                     </Box>
