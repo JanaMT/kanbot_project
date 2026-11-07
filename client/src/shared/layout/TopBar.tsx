@@ -1,14 +1,17 @@
 import { AppBar, Toolbar, Button, IconButton, Box } from '@mui/material';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import MenuIcon from '@mui/icons-material/Menu';
+import type { RefObject } from 'react';
 
 interface TopBarProps {
   onAskAI: () => void;
   onMenuClick?: () => void;
   showMenuButton?: boolean;
+  askAiButtonRef?: RefObject<HTMLButtonElement>;
+  menuButtonRef?: RefObject<HTMLButtonElement>;
 }
 
-export function TopBar({ onAskAI, onMenuClick, showMenuButton }: TopBarProps) {
+export function TopBar({ onAskAI, onMenuClick, showMenuButton, askAiButtonRef, menuButtonRef }: TopBarProps) {
   return (
     <AppBar
       position="static"
@@ -23,12 +26,14 @@ export function TopBar({ onAskAI, onMenuClick, showMenuButton }: TopBarProps) {
       <Toolbar 
         sx={{ 
           gap: 1,
-          minHeight: { xs: 56, sm: 64 },
+          minHeight: 56,
+          py: 1,
           px: { xs: 2, sm: 3 },
         }}
       >
         {showMenuButton && onMenuClick && (
           <IconButton
+            ref={menuButtonRef}
             color="inherit"
             aria-label="Open menu"
             edge="start"
@@ -40,6 +45,7 @@ export function TopBar({ onAskAI, onMenuClick, showMenuButton }: TopBarProps) {
         )}
         <Box sx={{ flexGrow: 1 }} />
         <Button
+          ref={askAiButtonRef}
           variant="contained"
           startIcon={<SmartToyIcon />}
           onClick={onAskAI}

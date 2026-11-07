@@ -1,9 +1,9 @@
 import { Box, useMediaQuery, useTheme } from '@mui/material';
 import { Outlet } from 'react-router';
+import { useRef, useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { AiDrawer } from '../../features/ai/components/AiDrawer';
-import { useState } from 'react';
 
 const DRAWER_WIDTH = 260;
 
@@ -12,6 +12,25 @@ export function AppShell() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
+  // Refs for focus restoration
+  const askAiButtonRef = useRef<HTMLButtonElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Ensure only one drawer is open at a time
+  const handleAskAI = () => {
+    if (mobileMenuOpen) {
+      setMobileMenuOpen(false);
+    }
+    setAiDrawerOpen(!aiDrawerOpen);
+  };
+
+  const handleMobileMenuOpen = () => {
+    if (aiDrawerOpen) {
+      setAiDrawerOpen(false);
+    }
+    setMobileMenuOpen(true);
+  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }}>
@@ -19,7 +38,8 @@ export function AppShell() {
         drawerWidth={DRAWER_WIDTH}
         mobileOpen={mobileMenuOpen}
         onMobileClose={() => setMobileMenuOpen(false)}
-        onMobileOpen={() => setMobileMenuOpen(true)}
+        onMobileOpen={handleMobileMenuOpen}
+        returnFocusRef={menuButtonRef}
       />
 
       <Box
@@ -35,9 +55,11 @@ export function AppShell() {
         }}
       >
         <TopBar
-          onAskAI={() => setAiDrawerOpen(!aiDrawerOpen)}
-          onMenuClick={() => setMobileMenuOpen(true)}
+          onAskAI={handleAskAI}
+          onMenuClick={handleMobileMenuOpen}
           showMenuButton={isMobile}
+          askAiButtonRef={askAiButtonRef}
+          menuButtonRef={menuButtonRef}
         />
 
         <Box
@@ -60,7 +82,11 @@ export function AppShell() {
       </Box>
 
       {/* AI Assistant Drawer */}
-      <AiDrawer open={aiDrawerOpen} onClose={() => setAiDrawerOpen(false)} />
+      <AiDrawer 
+        open={aiDrawerOpen} 
+        onClose={() => setAiDrawerOpen(false)}
+        returnFocusRef={askAiButtonRef}
+      />
     </Box>
   );
 }

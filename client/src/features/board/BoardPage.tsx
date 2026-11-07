@@ -13,6 +13,8 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
+  Tooltip,
+  CircularProgress,
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router';
 import {
@@ -136,6 +138,7 @@ export function BoardPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
 
   const { data: sprints = [] } = useSprints(projectId || '');
   const activeSprint = sprints.find((s) => s.status === 'active');
@@ -358,90 +361,253 @@ export function BoardPage() {
     >
       <Box sx={{ maxWidth: 1600, mx: 'auto' }}>
         {/* Sprint Header */}
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Paper sx={{ p: 2, mb: 2, position: 'relative' }}>
+          {/* Sprint Actions Menu - Top Right Corner */}
+          <IconButton
+            onClick={(e) => setMenuAnchor(e.currentTarget)}
+            size="small"
+            aria-label="Sprint actions"
+            sx={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              zIndex: 1,
+            }}
+          >
+            <MoreVertIcon />
+          </IconButton>
+          <Menu
+            anchorEl={menuAnchor}
+            open={Boolean(menuAnchor)}
+            onClose={() => setMenuAnchor(null)}
+          >
+            <MenuItem onClick={handleCompleteClick}>
+              <ListItemText>Complete Sprint</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={handleGenerateSummary}
+              disabled={generateSummaryMutation.isPending}
+            >
+              <ListItemIcon>
+                <AutoAwesomeIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>
+                {sprint.summary ? 'Regenerate Summary' : 'Generate Summary'}
+              </ListItemText>
+            </MenuItem>
+          </Menu>
+
+          {/* Row 1: Sprint name, status, goal */}
           <Box
             sx={{
               display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'start',
-              mb: 3,
+              alignItems: 'center',
+              gap: { xs: 1, sm: 1.5 },
+              mb: 1,
               flexWrap: 'wrap',
-              gap: 2,
+              pr: 5, // Space for actions menu
             }}
           >
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
-                {sprint.name}
-              </Typography>
-              {sprint.goal && (
-                <Typography variant="body1" color="text.secondary" gutterBottom>
-                  {sprint.goal}
-                </Typography>
-              )}
-              <Typography variant="body2" color="text.secondary">
-                {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
-                {daysLeft > 0 && ` · ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} remaining`}
-                {daysLeft === 0 && ' · Last day'}
-              </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
-              <IconButton
-                onClick={(e) => setMenuAnchor(e.currentTarget)}
-                size="small"
-                aria-label="More actions"
-              >
-                <MoreVertIcon />
-              </IconButton>
-              <Menu
-                anchorEl={menuAnchor}
-                open={Boolean(menuAnchor)}
-                onClose={() => setMenuAnchor(null)}
-              >
-                <MenuItem onClick={handleCompleteClick}>
-                  <ListItemText>Complete Sprint</ListItemText>
-                </MenuItem>
-                <MenuItem
-                  onClick={handleGenerateSummary}
-                  disabled={generateSummaryMutation.isPending}
+            {/* Sprint name */}
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 700,
+                maxWidth: { xs: '100%', sm: 200, md: 240 },
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {sprint.name}
+            </Typography>
+
+            {/* Status chip */}
+            <Chip label="Active" size="small" color="primary" variant="outlined" />
+
+            {/* Goal - visible in header */}
+            {sprint.goal ? (
+              <Tooltip title={sprint.goal} placement="top">
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    flex: { xs: '1 1 100%', md: '0 1 auto' },
+                    maxWidth: { md: 400 },
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontStyle: 'Roboto',
+                  }}
                 >
-                  <ListItemIcon>
-                    <AutoAwesomeIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText>
-                    {sprint.summary ? 'Regenerate Summary' : 'Generate Summary'}
-                  </ListItemText>
-                </MenuItem>
-              </Menu>
-              <Button variant="contained" onClick={handleCompleteClick}>
+                  Goal: {sprint.goal}
+                </Typography>
+              </Tooltip>
+            ) : (
+              <Typography
+                variant="body2"
+                color="text.disabled"
+                sx={{
+                  flex: { xs: '1 1 100%', md: '0 1 auto' },
+                  fontStyle: 'italic',
+                }}
+              >
+                No goal set
+              </Typography>
+            )}
+          </Box>
+
+          {/* Row 2: Dates and days remaining */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              mb: { xs: 1.5, md: 2 },
+              flexWrap: 'wrap',
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
+              {daysLeft > 0 && ` • ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left`}
+              {daysLeft === 0 && ' • Last day'}
+            </Typography>
+          </Box>
+
+          {/* Row 3: Progress (both metrics), AI Summary, and Complete Sprint */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              flexWrap: { xs: 'wrap', lg: 'nowrap' },
+            }}
+          >
+            {/* Progress section - shows both story points and todos */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                flex: { xs: '1 1 100%', lg: '1 1 auto' },
+                minWidth: 0,
+                flexWrap: { xs: 'wrap', sm: 'nowrap' },
+              }}
+            >
+              {/* Story points progress */}
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                {sprint.stats.donePoints} / {sprint.stats.totalPoints} story points done
+              </Typography>
+
+              {/* Separator */}
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ flexShrink: 0, display: { xs: 'none', sm: 'inline' } }}
+              >
+                •
+              </Typography>
+
+              {/* Todo completion progress */}
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                {sprint.stats.doneTodos} / {sprint.stats.totalTodos} todos completed
+              </Typography>
+
+              {/* Progress bar */}
+              <LinearProgress
+                variant="determinate"
+                value={progress}
+                sx={{
+                  flex: '1 1 auto',
+                  minWidth: { xs: 100, sm: 120, md: 150 },
+                  height: 8,
+                  borderRadius: 1,
+                  bgcolor: 'background.default',
+                }}
+              />
+            </Box>
+
+            {/* Action buttons section */}
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 1.5,
+                flexShrink: 0,
+                flex: { xs: '1 1 100%', sm: '0 0 auto' },
+                justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                flexWrap: 'wrap',
+              }}
+            >
+              {/* AI Summary Button */}
+              {sprint.summary && (
+                <Button
+                  size="small"
+                  startIcon={
+                    generateSummaryMutation.isPending ? (
+                      <CircularProgress size={16} />
+                    ) : (
+                      <AutoAwesomeIcon />
+                    )
+                  }
+                  onClick={() => setSummaryExpanded(!summaryExpanded)}
+                  disabled={generateSummaryMutation.isPending}
+                  variant={summaryExpanded ? 'contained' : 'outlined'}
+                  sx={{
+                    minWidth: 140,
+                    textTransform: 'none',
+                    transition: 'all 0.2s ease-in-out',
+                    '@media (prefers-reduced-motion: reduce)': {
+                      transition: 'none',
+                    },
+                    '&:hover': {
+                      transform: 'translateY(-1px)',
+                      boxShadow: 2,
+                      '@media (prefers-reduced-motion: reduce)': {
+                        transform: 'none',
+                      },
+                    },
+                    '&:active': {
+                      transform: 'translateY(0)',
+                    },
+                  }}
+                >
+                  AI Summary
+                </Button>
+              )}
+
+              {/* Complete Sprint Button */}
+              <Button
+                variant="contained"
+                onClick={handleCompleteClick}
+                size="small"
+                sx={{
+                  flexShrink: 0,
+                  minWidth: 140,
+                  textTransform: 'none',
+                }}
+              >
                 Complete Sprint
               </Button>
             </Box>
           </Box>
-
-          {/* Progress */}
-          <Box sx={{ mb: 1 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {sprint.stats.donePoints} / {sprint.stats.totalPoints} story points done
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {sprint.stats.doneTodos} / {sprint.stats.totalTodos} todos
-              </Typography>
-            </Box>
-            <LinearProgress
-              variant="determinate"
-              value={progress}
-              sx={{
-                height: 8,
-                borderRadius: 1,
-                bgcolor: 'background.default',
-              }}
-            />
-          </Box>
         </Paper>
 
-        {/* AI Summary - show if exists, generating, or has error */}
-        {(sprint.summary || generateSummaryMutation.isPending || summaryError) && (
+        {/* AI Summary - show if expanded and exists/generating/error */}
+        {summaryExpanded && (sprint.summary || generateSummaryMutation.isPending || summaryError) && (
           <SprintSummaryCard
             sprint={sprint}
             onGenerate={handleGenerateSummary}

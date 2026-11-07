@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import {
   Drawer,
   Box,
@@ -32,11 +32,12 @@ import { routes } from '../../../app/navigation';
 interface AiDrawerProps {
   open: boolean;
   onClose: () => void;
+  returnFocusRef?: RefObject<HTMLButtonElement>;
 }
 
 const DRAWER_WIDTH = 440;
 
-export function AiDrawer({ open, onClose }: AiDrawerProps) {
+export function AiDrawer({ open, onClose, returnFocusRef }: AiDrawerProps) {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const { data: aiStatus, isLoading: isLoadingStatus } = useAiStatus();
@@ -44,6 +45,7 @@ export function AiDrawer({ open, onClose }: AiDrawerProps) {
   const chatMutation = useChatMutation(projectId || '');
   const { messages, addMessage, clearMessages } = useChat(projectId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [generateTodosOpen, setGenerateTodosOpen] = useState(false);
@@ -155,11 +157,63 @@ export function AiDrawer({ open, onClose }: AiDrawerProps) {
     }
   };
 
+  // Focus the close button when drawer opens (after MUI has set up the focus trap)
+  useEffect(() => {
+    if (open && closeButtonRef.current) {
+      // Small delay to let MUI set up the focus trap first
+      const timer = setTimeout(() => {
+        closeButtonRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
+
+  // Handle focus restoration after drawer closes
+  const handleTransitionExited = () => {
+    // Return focus to the Ask AI button after the drawer has fully closed
+    // Only restore if trigger exists, is mounted, visible, and enabled
+    if (
+      returnFocusRef?.current && 
+      document.contains(returnFocusRef.current) &&
+      !returnFocusRef.current.disabled
+    ) {
+      returnFocusRef.current.focus();
+    }
+  };
+
+  // Ensure child dialogs are closed before drawer closes
+  const handleDrawerClose = () => {
+    // If child dialogs are open, only close them (not the drawer)
+    // This ensures Escape closes the topmost modal first
+    if (generateTodosOpen) {
+      setGenerateTodosOpen(false);
+      return;
+    }
+    if (planSprintOpen) {
+      setPlanSprintOpen(false);
+      return;
+    }
+    
+    // Immediately move focus to trigger button to prevent it landing on hidden background
+    // This prevents the aria-hidden warning during the close transition
+    if (
+      returnFocusRef?.current && 
+      document.contains(returnFocusRef.current) &&
+      !returnFocusRef.current.disabled
+    ) {
+      returnFocusRef.current.focus();
+    }
+    
+    // Then close the drawer
+    onClose();
+  };
+
   return (
     <Drawer
       anchor="right"
       open={open}
-      onClose={onClose}
+      onClose={handleDrawerClose}
+      onTransitionExited={handleTransitionExited}
       sx={{
         '& .MuiDrawer-paper': {
           width: {
@@ -215,7 +269,12 @@ export function AiDrawer({ open, onClose }: AiDrawerProps) {
                 <RefreshIcon />
               </IconButton>
             )}
-            <IconButton size="small" onClick={onClose} aria-label="Close drawer">
+            <IconButton 
+              ref={closeButtonRef}
+              size="small" 
+              onClick={handleDrawerClose} 
+              aria-label="Close drawer"
+            >
               <CloseIcon />
             </IconButton>
           </Box>

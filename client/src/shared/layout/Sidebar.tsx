@@ -20,6 +20,7 @@ import {
   Chip,
 } from '@mui/material';
 import { useNavigate, useLocation, useParams } from 'react-router';
+import { useRef, useEffect, type RefObject } from 'react';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import HistoryIcon from '@mui/icons-material/History';
@@ -39,9 +40,10 @@ interface SidebarProps {
   mobileOpen: boolean;
   onMobileClose: () => void;
   onMobileOpen: () => void;
+  returnFocusRef?: RefObject<HTMLButtonElement>;
 }
 
-export function Sidebar({ drawerWidth, mobileOpen, onMobileClose }: SidebarProps) {
+export function Sidebar({ drawerWidth, mobileOpen, onMobileClose, returnFocusRef }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId } = useParams<{ projectId: string }>();
@@ -52,6 +54,26 @@ export function Sidebar({ drawerWidth, mobileOpen, onMobileClose }: SidebarProps
   const { mode, toggleTheme } = useThemeMode();
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<null | HTMLElement>(null);
   const settingsOpen = Boolean(settingsAnchorEl);
+  
+  // Ref to the logo/branding area for initial focus
+  const logoRef = useRef<HTMLDivElement>(null);
+
+  // Focus the logo area when mobile drawer opens
+  useEffect(() => {
+    if (isMobile && mobileOpen && logoRef.current) {
+      const timer = setTimeout(() => {
+        logoRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isMobile, mobileOpen]);
+
+  // Handle focus restoration after mobile drawer closes
+  const handleTransitionExited = () => {
+    if (returnFocusRef?.current) {
+      returnFocusRef.current.focus();
+    }
+  };
 
   const handleSettingsClick = (event: React.MouseEvent<HTMLElement>) => {
     setSettingsAnchorEl(event.currentTarget);
@@ -101,7 +123,19 @@ export function Sidebar({ drawerWidth, mobileOpen, onMobileClose }: SidebarProps
   const drawerContent = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Logo and branding */}
-      <Box sx={{ px: 2.5, py: 2.5, display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
+      <Box 
+        ref={logoRef}
+        tabIndex={-1}
+        sx={{ 
+          px: 2.5, 
+          py: 2.5, 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1.5, 
+          flexShrink: 0,
+          outline: 'none', 
+        }}
+      >
         <img src="/brand/kanbot-icon.svg" alt="Kanbot" style={{ width: 32, height: 32 }} />
         <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main' }}>
           Kanbot
@@ -394,6 +428,7 @@ export function Sidebar({ drawerWidth, mobileOpen, onMobileClose }: SidebarProps
           variant="temporary"
           open={mobileOpen}
           onClose={handleMobileClose}
+          onTransitionExited={handleTransitionExited}
           ModalProps={{
             keepMounted: true, // Better mobile performance
           }}
